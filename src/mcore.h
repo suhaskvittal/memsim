@@ -5,6 +5,7 @@
 #include "memsys.h"
 #include "os.h"
 #include "mcache.h"
+
 #include <zlib.h>
 
 
@@ -61,9 +62,16 @@ struct MCore {
     uns    trace_iaddr; // four bytes only IA
     Addr   trace_va;
     Flag   trace_wb;
+
+    // Structure is just for holding.
+    struct {
+        Flag    valid=0;
+        Addr    va;
+        uns64   line[8];
+    } trace_wb_data;
+
     uns    trace_dhits;
     uns64  trace_inst_num_clone;//debug
-
     
     uns64 cycle;
     uns64 inst_num;

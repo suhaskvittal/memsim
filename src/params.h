@@ -19,7 +19,7 @@ uns64       LINESIZE        = 64;
 uns64       OS_PAGESIZE     = 4096; 
 
 
-uns64       L3_SIZE_KB      = 8192; 
+uns64       L3_SIZE_KB      = 128*1024; 
 uns64       L3_ASSOC        = 16; 
 uns64       L3_LATENCY      = 24; // cycles
 uns64       L3_REPL         = 0; //0:LRU 1:RND 2:SRRIP

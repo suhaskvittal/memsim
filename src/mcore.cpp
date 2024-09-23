@@ -36,21 +36,14 @@ MCore *mcore_new(MemSys *memsys, OS *os, MCache *l3cache, char *addr_trace_fname
 ////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////
 void mcore_init_trace(MCore *c){
-
-  //char  command_string[256];
-  //  sprintf(command_string,"gunzip -c %s", c->addr_trace_fname);
-
-  if ((c->addr_trace = gzopen(c->addr_trace_fname, "r")) == NULL){
-
-    //---- maybe put random sleep and try again?
-    printf("Problems initializing Core: %u ... Trying again\n", (uns)c->id);
-    sleep(rand()%10);
     if ((c->addr_trace = gzopen(c->addr_trace_fname, "r")) == NULL){
-      die_message("Unable to open the input trace file. Dying ...\n");
+        //---- maybe put random sleep and try again?
+        printf("Problems initializing Core: %u ... Trying again\n", (uns)c->id);
+        sleep(rand()%10);
+        if ((c->addr_trace = gzopen(c->addr_trace_fname, "r")) == NULL) {
+            die_message("Unable to open the input trace file. Dying ...\n");
+        }
     }
-
-  }
-
 }
 
 
@@ -62,92 +55,83 @@ if trace_inst_num, get delay and insert in ROB and curr+delay
 ///////////////////////////////////////////////////////////////////*/
 
 void mcore_cycle (MCore *c){
-
-  if(MCORE_STOP_ON_EOF && c->done){
-    return;
-  }
-
-  c->cycle++;
-
-  mcore_rob_retire(c); // try to retire
-
-  //--- handling case of memory queue full
-  if(c->sleep){
-    if (!mcore_retry_sleeping_request(c)){
-      return; // failed, then sleep again
+    if(MCORE_STOP_ON_EOF && c->done){
+        return;
     }
-  }
 
+    c->cycle++;
 
-  for(uns ii=0; ii< CORE_WIDTH; ii++){
-    uns delay = 0;
-    Flag mem_access=FALSE;
-    
-    if(c->rob.size == ROB_SIZE){
-      return; // if ROB full, exit ...
+    mcore_rob_retire(c); // try to retire
+
+    //--- handling case of memory queue full
+    if(c->sleep){
+        if (!mcore_retry_sleeping_request(c)){
+            return; // failed, then sleep again
+        }
     }
+
+
+    for(uns ii=0; ii< CORE_WIDTH; ii++){
+        uns delay = 0;
+        Flag mem_access=FALSE;
+        
+        if(c->rob.size == ROB_SIZE){
+          return; // if ROB full, exit ...
+        }
     
-    c->inst_num++;
+        c->inst_num++;
   
-    if( (!c->done) && c->inst_num > INST_LIMIT){
-      mcore_read_trace(c); // break loop
-    }
+        if( (!c->done) && c->inst_num > INST_LIMIT){
+          mcore_read_trace(c); // break loop
+        }
 
-    Addr orig_lineaddr = os_v2p_lineaddr(c->os, c->trace_va, c->id);
-    Addr wb_lineaddr   = 0;
+        Addr orig_lineaddr = os_v2p_lineaddr(c->os, c->trace_va, c->id);
+        Addr wb_lineaddr   = 0;
 
-    if(c->inst_num >= c->trace_inst_num){
+        if(c->inst_num >= c->trace_inst_num){
+            if(c->trace_wb){
+                mcache_mark_dirty(c->l3cache, orig_lineaddr);
+            }
 
-      if(c->trace_wb){
-	mcache_mark_dirty(c->l3cache, orig_lineaddr);
-      }
+            if(c->trace_wb==FALSE){
+                delay += L3_LATENCY; // incurred on both hit and miss
+                c->access_count++;
+                Flag l3outcome = mcache_access(c->l3cache, orig_lineaddr);
 
-      if(c->trace_wb==FALSE){
-	delay += L3_LATENCY; // incurred on both hit and miss
-	c->access_count++;
-	Flag l3outcome = mcache_access(c->l3cache, orig_lineaddr);
+                if( (L3_PERFECT==FALSE) && (l3outcome==MISS)){
+                    delay += DEFAULT_MEM_DELAY;
+                    mem_access=TRUE;
+                    mcache_install(c->l3cache,orig_lineaddr);
 
-	if( (L3_PERFECT==FALSE) && (l3outcome==MISS)){
-	  delay += DEFAULT_MEM_DELAY;
-	  mem_access=TRUE;
-	  mcache_install(c->l3cache,orig_lineaddr);
-
-	  if(MCORE_DO_WRITEBACKS && c->l3cache->evicted_dirty_line){
-	    wb_lineaddr =  c->l3cache->evicted_line_addr;
-	  }
+                    if(MCORE_DO_WRITEBACKS && c->l3cache->evicted_dirty_line){
+                        wb_lineaddr =  c->l3cache->evicted_line_addr;
+                    }
+                    c->miss_count++;
+                }
+            }
+            mcore_read_trace(c);
+        }
+        //--- insert entry into rob
+        uns myrobid = mcore_rob_insert(c, c->inst_num, c->cycle, c->cycle+delay);
+        if(mem_access){
+            if(c->id == DEBUG_CORE_ID){
+	            printf("CORE-RDSEND for CoreID: %u ROBID: %u InstNum: %llu Cycle: %llu\n",
+                        c->id, myrobid, c->inst_num, c->cycle);
+            }
        
-	  c->miss_count++;
-	}
-      }
-     
-      mcore_read_trace(c);
+            if(memsys_access(c->memsys, orig_lineaddr, c->id, myrobid, c->inst_num, wb_lineaddr)==FAIL){
+	            DBGMSGC(c->id, "SLEEPING: Core: %u ROBID: %u InstNum: %llu Cycle: %llu\n",
+		            c->id, myrobid,  c->inst_num, c->cycle);
+
+	            c->queue_full_count++;
+	            c->sleep_lineaddr = orig_lineaddr;
+                c->sleep_robid    = myrobid;
+                c->sleep_inst_num = c->inst_num;
+                c->sleep = TRUE;
+                return; // exit the cycle
+            }
+        }
     }
-
-    //--- insert entry into rob
-    uns myrobid = mcore_rob_insert(c, c->inst_num, c->cycle, c->cycle+delay);
-    if(mem_access){
-
-      if(c->id == DEBUG_CORE_ID){
-	printf("CORE-RDSEND for CoreID: %u ROBID: %u InstNum: %llu Cycle: %llu\n", c->id, myrobid, c->inst_num, c->cycle);
-      }
-       
-      if(memsys_access(c->memsys, orig_lineaddr, c->id, myrobid, c->inst_num, wb_lineaddr)==FAIL){
-
-	DBGMSGC(c->id, "SLEEPING: Core: %u ROBID: %u InstNum: %llu Cycle: %llu\n",
-		      c->id, myrobid,  c->inst_num, c->cycle);
-	
-	c->queue_full_count++;
-	c->sleep_lineaddr = orig_lineaddr;
-	c->sleep_robid    = myrobid;
-	c->sleep_inst_num = c->inst_num;
-	c->sleep = TRUE;
-	return; // exit the cycle
-      }
-
-    }
-       
-  }
-
 }
 
 
@@ -155,34 +139,28 @@ void mcore_cycle (MCore *c){
 ////////////////////////////////////////////////////////////////////
 
 void mcore_read_trace (MCore *c){
-
     mcore_fread_trace(c);
-
     if(gzeof(c->addr_trace) || ((!c->done) && (c->inst_num >= INST_LIMIT)) ){
-
-
-      if(!c->done){
-	//printf("\nCoreID: %u is done with %u INST...\n", c->id, (uns)INST_LIMIT);
-	c->done_inst_count  = c->inst_num;
-	c->done_cycle_count = c->cycle;
-	c->done_access_count= c->access_count;
-	c->done_miss_count  = c->miss_count;
-	c->done_num_delay_count = c->num_delay_count;
-	c->done_sum_delay_count = c->sum_delay_count;
-	c->done_queue_full_count = c->queue_full_count;
-	c->done_sleep_cycle_count = c->sleep_cycle_count;
-	c->done = 1;
-      }
-    
-      if(!MCORE_STOP_ON_EOF){
-	gzclose(c->addr_trace);
-	mcore_init_trace(c);
-	mcore_fread_trace(c);
-	c->lifetime_inst_count += c->inst_num;
-	c->inst_num = 0;
-      }
+        if(!c->done){
+            //printf("\nCoreID: %u is done with %u INST...\n", c->id, (uns)INST_LIMIT);
+            c->done_inst_count  = c->inst_num;
+            c->done_cycle_count = c->cycle;
+            c->done_access_count= c->access_count;
+            c->done_miss_count  = c->miss_count;
+            c->done_num_delay_count = c->num_delay_count;
+            c->done_sum_delay_count = c->sum_delay_count;
+            c->done_queue_full_count = c->queue_full_count;
+            c->done_sleep_cycle_count = c->sleep_cycle_count;
+            c->done = 1;
+        }
+        if(!MCORE_STOP_ON_EOF) {
+            gzclose(c->addr_trace);
+            mcore_init_trace(c);
+            mcore_fread_trace(c);
+            c->lifetime_inst_count += c->inst_num;
+            c->inst_num = 0;
+        }
     }
-  
 }
 
 ////////////////////////////////////////////////////////////
@@ -224,15 +202,27 @@ void mcore_print_stats(MCore *c){
 ////////////////////////////////////////////////////////////////////
 
 void mcore_fread_trace (MCore *c){
-  
-    c->trace_inst_num=0;
-    c->trace_va=0;
-    c->trace_wb=0;
+    c->trace_wb = c->trace_wb_data.valid;
+    // Check if we need to service a writeback.
+    if (c->trace_wb_data.valid) {
+        c->trace_va = c->trace_wb_data.va;
+        c->trace_wb_data.valid = 0;
+    } else {
+        Flag ins_is_iload;
+        gzread( c->addr_trace, &c->trace_inst_num, 8 );
+        gzread( c->addr_trace, &ins_is_iload, 1 );
+        gzread( c->addr_trace, &c->trace_va, 8 );
+        gzread( c->addr_trace, &c->trace_wb_data.valid, 1 );
+        if (c->trace_wb_data.valid) {
+            gzread( c->addr_trace, &c->trace_wb_data.va, 8 );
+            gzread( c->addr_trace, c->trace_wb_data.line, 64 );
+        }
+        c->trace_inst_num -= 4'000'000'000;
+    }
 
-    gzread ( c->addr_trace, &c->trace_inst_num, 5);
-    gzread ( c->addr_trace, &c->trace_wb, 1);
-    gzread ( c->addr_trace, &c->trace_va, 4);
-
+//  gzread ( c->addr_trace, &c->trace_inst_num, 5);
+//  gzread ( c->addr_trace, &c->trace_wb, 1);
+//  gzread ( c->addr_trace, &c->trace_va, 4);
 }
 
 

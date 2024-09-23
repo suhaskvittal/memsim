@@ -3,7 +3,6 @@
 #define TRUE  1
 #define FALSE 0
 
-
 #define HIT   1
 #define MISS  0
 
@@ -27,15 +26,15 @@
 /* Renames -- Try to use these rather than built-in C types for portability */
 
 
-typedef unsigned	    uns;
+typedef unsigned	        uns;
 typedef unsigned char	    uns8;
 typedef unsigned short	    uns16;
-typedef unsigned	    uns32;
+typedef unsigned	        uns32;
 typedef unsigned long long  uns64;
-typedef short		    int16;
-typedef int		    int32;
+typedef short		        int16;
+typedef int		            int32;
 typedef int long long	    int64;
-typedef int		    Generic_Enum;
+typedef int		            Generic_Enum;
 
 
 /* Conventions */

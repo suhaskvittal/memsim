@@ -24,6 +24,8 @@ struct MemSys {
   DRAM     *mainmem;
   uns64     lines_in_mainmem_rbuf;
   std::unordered_map<uns64, MSHR_Entry> mshr;
+
+  std::unordered_map<Addr, uns64> address_line_data_map;
 };
 
 ////////////////////////////////////////////////////////////////////
