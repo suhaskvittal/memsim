@@ -152,7 +152,7 @@ void    dram_parseaddr(DRAM *d, Addr lineaddr, uns64 *myrowbufid, uns64 *mybanki
     return;
   }
   
-  assert(0); // other policy not implemented yet
+  exit(1);
 }
 
 ////////////////////////////////////////////////////////////

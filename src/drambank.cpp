@@ -263,7 +263,7 @@ uns         dram_bank_schedule(DRAM_Bank *b){
     return 0; 
   }
 
-  assert(0);
+  exit(1);
 }
 
 ////////////////////////////////////////////////////////////

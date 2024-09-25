@@ -25,7 +25,11 @@ struct MemSys {
   uns64     lines_in_mainmem_rbuf;
   std::unordered_map<uns64, MSHR_Entry> mshr;
 
-  std::unordered_map<Addr, uns64> address_line_data_map;
+  /*
+   * Maps virtual addresses to cache lines. Each thread
+   * has its own map. Supports up-to 8 threads.
+   * */
+  std::array<std::unordered_map<Addr, Line<8>>, 8> data_map;
 };
 
 ////////////////////////////////////////////////////////////////////
@@ -38,6 +42,11 @@ void    memsys_print_state(MemSys *m);
 void    memsys_print_stats(MemSys *m);
 void    memsys_mshr_insert(MemSys *m, Addr lineaddr, uns coreid, uns robid, uns64 inst_num);
 void    memsys_callback(MemSys *m, Addr lineaddr);
+
+/*
+ * Loads data from initialization file.
+ * */
+void    memsys_load_init_file(char*);
 
 ///////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////

@@ -217,7 +217,6 @@ void mcore_fread_trace (MCore *c){
             gzread( c->addr_trace, &c->trace_wb_data.va, 8 );
             gzread( c->addr_trace, c->trace_wb_data.line, 64 );
         }
-        c->trace_inst_num -= 4'000'000'000;
     }
 
 //  gzread ( c->addr_trace, &c->trace_inst_num, 5);

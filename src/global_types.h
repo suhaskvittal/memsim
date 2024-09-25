@@ -1,5 +1,7 @@
 #ifndef __GLOBAL_TYPES_H__
 
+#include <array>
+
 #define TRUE  1
 #define FALSE 0
 
@@ -36,6 +38,7 @@ typedef int		            int32;
 typedef int long long	    int64;
 typedef int		            Generic_Enum;
 
+template <int C=8> using Line=std::array<uns64, C>;
 
 /* Conventions */
 typedef uns64		    Addr;

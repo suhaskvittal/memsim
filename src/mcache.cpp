@@ -213,7 +213,7 @@ uns mcache_find_victim (MCache *c, uns set)
   case REPL_SRRIP: 
     return mcache_find_victim_srrip(c, set);
   default: 
-    assert(0);
+    exit(1);
   }
 
   return -1;

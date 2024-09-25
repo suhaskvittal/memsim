@@ -64,8 +64,7 @@ uns64    os_get_victim_from_ipt(OS *os){
   }
 
   printf("OS Could not find an invalid page. Dying\n");
-  assert(0);
-  return 0; 
+  exit(1);
 }
 
 ////////////////////////////////////////////////////////////
